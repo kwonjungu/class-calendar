@@ -308,11 +308,13 @@ button,input{font-family:inherit;font-size:inherit;color:inherit;}
      apikey 는 공개되는 값이고, 막는 것은 schema.sql 의 RLS 규칙입니다. */
   function sb(path, options) {
     var o = options || {};
-    o.headers = Object.assign({
-      apikey: CFG.supabaseAnonKey,
-      Authorization: 'Bearer ' + CFG.supabaseAnonKey,
-      'Content-Type': 'application/json'
-    }, o.headers || {});
+    // 수파베이스 키는 두 가지 생김새가 있습니다.
+    //  · 예전 것: eyJ... 로 시작하는 긴 JWT (anon public)
+    //  · 새 것  : sb_publishable_... 로 시작
+    // 새 키는 Authorization 헤더에 넣으면 거부될 수 있어 apikey 로만 보냅니다.
+    var base = { apikey: CFG.supabaseAnonKey, 'Content-Type': 'application/json' };
+    if (/^eyJ/.test(CFG.supabaseAnonKey)) base.Authorization = 'Bearer ' + CFG.supabaseAnonKey;
+    o.headers = Object.assign(base, o.headers || {});
     return fetch(CFG.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/' + path, o)
       .then(function (r) {
         return r.text().then(function (t) {
