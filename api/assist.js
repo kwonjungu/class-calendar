@@ -67,16 +67,46 @@ async function callGroq(apiKey, payload) {
   throw new Error((last.error && (last.error.message || last.error)) || 'AI 호출 실패');
 }
 
+// 플랫폼마다 req.body 를 주기도 하고 안 주기도 한다. 문자열로 줄 때도 있다.
+// 어느 쪽이든 읽히게 한다. 이걸 안 하면 "무엇을 넣을지 적어 주세요" 만 나온다.
+function readBody(req) {
+  return new Promise((resolve) => {
+    const b = req.body;
+    if (b && typeof b === 'object' && !Buffer.isBuffer(b)) return resolve(b);
+    if (typeof b === 'string') {
+      try { return resolve(JSON.parse(b)); } catch (e) { return resolve({}); }
+    }
+    if (Buffer.isBuffer(b)) {
+      try { return resolve(JSON.parse(b.toString('utf8'))); } catch (e) { return resolve({}); }
+    }
+    let raw = '';
+    req.on('data', (c) => { raw += c; });
+    req.on('end', () => { try { resolve(raw ? JSON.parse(raw) : {}); } catch (e) { resolve({}); } });
+    req.on('error', () => resolve({}));
+  });
+}
+
 module.exports = async (req, res) => {
+  const apiKey = process.env.GROQ_API_KEY;
+
+  // 브라우저로 이 주소를 열면 상태를 알려 준다. 실습 중 확인용이다.
+  //   내주소/api/assist  ->  열쇠가 꽂혔는지 바로 보인다
+  if (req.method === 'GET') {
+    return res.status(200).json({
+      ok: true,
+      열쇠있음: Boolean(apiKey),
+      안내: apiKey ? '열쇠가 꽂혀 있습니다. 화면에서 정리하기를 눌러 보세요.'
+                   : 'GROQ_API_KEY 가 없습니다. Vercel 환경변수에 넣고 반드시 다시 배포(Redeploy)하세요.'
+    });
+  }
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'POST 로 불러 주세요.' });
   }
-  const apiKey = process.env.GROQ_API_KEY;
   if (!apiKey) {
-    return res.status(400).json({ error: 'GROQ_API_KEY 가 없습니다. Vercel 환경변수에 넣고 다시 배포하세요.' });
+    return res.status(400).json({ error: 'GROQ_API_KEY 가 없습니다. Vercel 환경변수에 넣고 다시 배포(Redeploy)하세요.' });
   }
 
-  const body = req.body || {};
+  const body = await readBody(req);
   const text = clean(body.text, MAX_CHARS);
   const today = DAY_RE.test(String(body.today || '')) ? body.today : ymd(new Date());
   if (!text) return res.status(400).json({ error: '무엇을 넣을지 적어 주세요.' });

@@ -353,7 +353,13 @@ button,input{font-family:inherit;font-size:inherit;color:inherit;}
     $('app').hidden = false;
     $('room-badge').textContent = '방 ' + CFG.roomCode;
     $('me-badge').textContent = myName;
-    if (CFG.hasAi) $('assist').hidden = false;
+    // 열쇠가 없어도 칸은 보여 준다. 조용히 사라지면 "AI가 안 된다"로만 보인다.
+    $('assist').hidden = false;
+    if (!CFG.hasAi) {
+      $('ai-input').disabled = true;
+      $('ai-go').disabled = true;
+      aiNote('AI 열쇠(GROQ_API_KEY)가 없습니다. Vercel 환경변수에 넣고 다시 배포(Redeploy)하면 이 칸이 켜집니다.', true);
+    }
     load();
     if (!timer) timer = setInterval(function () { if (!document.hidden) load(true); }, POLL_MS);
   }
