@@ -1,0 +1,631 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>우리 반 공용 캘린더</title>
+<meta name="description" content="입장코드 하나로 여럿이 같이 적는 공용 캘린더. 서버 붙이기와 API 붙이기 실습용.">
+<style>
+:root{
+  --ink:#111111; --canvas:#ffffff; --soft:#f5f5f5;
+  --line:#e2e2e4; --line-strong:#cacacb; --mute:#707072;
+  --accent:#3d3a8c; --accent-soft:#ecebf7;
+  --sale:#d30005; --mine:#8a5a00; --mine-soft:#fdf2dd;
+  --font:"Pretendard","Apple SD Gothic Neo","Malgun Gothic",sans-serif;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;background:var(--canvas);color:var(--ink);font-family:var(--font);font-size:17px;line-height:1.6;-webkit-text-size-adjust:100%;}
+button,input{font-family:inherit;font-size:inherit;color:inherit;}
+
+.btn{display:inline-block;padding:12px 28px;border:1px solid var(--ink);border-radius:30px;background:var(--canvas);font-weight:700;cursor:pointer;}
+.btn-primary{background:var(--ink);color:#fff;}
+.btn-small{padding:7px 16px;font-size:14px;}
+.btn:disabled{opacity:.45;cursor:default;}
+
+/* ---------- 설정이 덜 됐을 때 ---------- */
+.setup{max-width:640px;margin:0 auto;padding:40px 20px;}
+.setup[hidden],.gate[hidden],.app[hidden]{display:none;}
+.setup h1{font-size:30px;margin:0 0 12px;}
+.setup ol{padding-left:1.2em;}
+.setup code{background:var(--soft);padding:2px 6px;}
+.setup .miss{color:var(--sale);font-weight:700;}
+
+/* ---------- 입장 ---------- */
+.gate{min-height:100dvh;display:flex;align-items:center;justify-content:center;padding:24px;}
+.gate-box{width:100%;max-width:420px;}
+.kicker{margin:0;font-size:12px;letter-spacing:.12em;text-transform:uppercase;color:var(--mute);}
+.gate h1{margin:4px 0 12px;font-size:44px;line-height:1.1;letter-spacing:-.02em;}
+.gate-lead{margin:0 0 26px;color:#39393b;}
+.field{display:block;margin-bottom:16px;}
+.field span{display:block;margin-bottom:6px;font-size:14px;font-weight:700;color:var(--mute);}
+.field input{width:100%;padding:14px 16px;border:1px solid var(--line-strong);background:var(--canvas);}
+.field input:focus{outline:2px solid var(--accent);outline-offset:-2px;}
+.err{margin:0 0 12px;color:var(--sale);font-size:15px;font-weight:700;}
+#gate-enter{width:100%;margin-top:4px;}
+.gate-foot{margin:20px 0 0;font-size:14px;line-height:1.55;color:var(--mute);}
+
+/* ---------- 정리 어시스턴트 ---------- */
+.assist{margin:0 0 18px;padding:16px;border:1px solid var(--line);}
+.assist[hidden]{display:none;}
+.assist-title{margin:0 0 4px;font-size:18px;}
+.assist-lead{margin:0 0 12px;font-size:14px;color:var(--mute);}
+.assist-form{display:flex;gap:8px;}
+.assist-form input{flex:1;min-width:0;padding:12px 14px;border:1px solid var(--line-strong);}
+.assist-form input:focus{outline:2px solid var(--accent);outline-offset:-2px;}
+.assist-note{margin:10px 0 0;font-size:14px;color:var(--mute);}
+.assist-note.is-bad{color:var(--sale);font-weight:700;}
+.assist-list{list-style:none;margin:12px 0 0;padding:0;}
+.assist-list li{display:flex;align-items:center;gap:10px;padding:10px 0;border-top:1px solid var(--line);}
+.ai-day{flex:none;min-width:7.5em;font-size:14px;font-weight:700;color:var(--accent);}
+.ai-title{flex:1;min-width:0;overflow-wrap:anywhere;}
+
+/* ---------- 확인 문구 ---------- */
+.toast{position:fixed;left:50%;bottom:24px;transform:translateX(-50%) translateY(8px);
+  max-width:calc(100% - 32px);padding:12px 20px;background:var(--ink);color:#fff;
+  font-size:15px;font-weight:700;border-radius:30px;text-align:center;
+  opacity:0;transition:opacity .2s,transform .2s;z-index:20;}
+.toast[hidden]{display:none;}
+.toast.is-on{opacity:1;transform:translateX(-50%) translateY(0);}
+
+/* ---------- 달력 ---------- */
+.app{max-width:1180px;margin:0 auto;padding:18px 20px 48px;}
+.bar{display:flex;flex-wrap:wrap;gap:12px;align-items:center;justify-content:space-between;padding-bottom:14px;border-bottom:1px solid var(--line);}
+.bar-left,.bar-right{display:flex;align-items:center;gap:10px;}
+.bar h2{margin:0;font-size:28px;letter-spacing:-.01em;min-width:7.5em;text-align:center;}
+.nav{width:40px;height:40px;border:1px solid var(--line-strong);border-radius:50%;background:var(--canvas);font-size:22px;line-height:1;cursor:pointer;}
+.nav:hover{background:var(--soft);}
+.chip{padding:8px 16px;border:1px solid var(--line-strong);border-radius:30px;background:var(--canvas);font-size:14px;font-weight:700;cursor:pointer;}
+.chip:hover{background:var(--soft);}
+.badge{padding:8px 14px;background:var(--soft);font-size:14px;font-weight:700;color:#39393b;max-width:10em;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+.status{min-height:1.6em;margin:10px 0 0;font-size:15px;color:var(--mute);}
+.status.is-bad{color:var(--sale);font-weight:700;}
+
+/* minmax(0,1fr) 이라야 칸이 내용보다 좁아질 수 있습니다. 1fr 로 두면 안 끊기는
+   긴 글자 한 줄에 달력 전체가 옆으로 밀립니다. */
+.week-head,.grid{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));}
+.week-head{margin-top:6px;font-size:13px;font-weight:700;color:var(--mute);}
+.week-head span{padding:8px 6px;text-align:center;}
+.week-head span:first-child{color:var(--sale);}
+.week-head span:last-child{color:var(--accent);}
+.grid{border-top:1px solid var(--line);border-left:1px solid var(--line);}
+.cell{min-height:118px;min-width:0;padding:8px;border-right:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--canvas);text-align:left;cursor:pointer;display:flex;flex-direction:column;gap:4px;font:inherit;}
+.cell:hover{background:var(--soft);}
+.cell.is-out{background:#fafafa;color:#b5b5b7;cursor:default;}
+.cell.is-out:hover{background:#fafafa;}
+.cell-no{align-self:flex-start;min-width:26px;padding:2px 6px;font-size:14px;font-weight:700;text-align:center;}
+.cell.is-sun .cell-no{color:var(--sale);}
+.cell.is-sat .cell-no{color:var(--accent);}
+.cell.is-today .cell-no{background:var(--ink);color:#fff;}
+.cell.is-today.is-sun .cell-no,.cell.is-today.is-sat .cell-no{color:#fff;}
+.ev{padding:3px 7px;background:var(--accent-soft);border-left:3px solid var(--accent);font-size:13px;line-height:1.35;
+    min-width:0;max-width:100%;overflow:hidden;overflow-wrap:anywhere;white-space:normal;
+    display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;}
+.ev.is-mine{background:var(--mine-soft);border-left-color:var(--mine);}
+.more{font-size:12px;font-weight:700;color:var(--mute);}
+.app-foot{margin:18px 0 0;font-size:14px;color:var(--mute);}
+
+/* ---------- 하루 시트 ---------- */
+.sheet{position:fixed;inset:0;display:flex;align-items:flex-end;justify-content:center;background:rgba(17,17,17,.45);z-index:10;}
+.sheet[hidden]{display:none;}
+.panel{width:100%;max-width:560px;max-height:84dvh;overflow-y:auto;padding:20px;background:var(--canvas);}
+.panel-head{display:flex;align-items:center;justify-content:space-between;}
+.panel-head h3{margin:0;font-size:24px;}
+.list{list-style:none;margin:14px 0;padding:0;}
+.list li{display:flex;align-items:flex-start;gap:10px;padding:12px 0;border-top:1px solid var(--line);}
+.list li:last-child{border-bottom:1px solid var(--line);}
+.who{flex:none;min-width:4.5em;max-width:6.5em;overflow-wrap:anywhere;font-size:13px;font-weight:700;color:var(--mute);}
+.what{flex:1;min-width:0;overflow-wrap:anywhere;}
+.del{flex:none;border:0;background:none;padding:0 2px;font-size:14px;font-weight:700;color:var(--sale);cursor:pointer;text-decoration:underline;}
+.empty{padding:16px 0;color:var(--mute);}
+.form{display:flex;gap:8px;}
+.form input{flex:1;min-width:0;padding:13px 14px;border:1px solid var(--line-strong);}
+.form input:focus{outline:2px solid var(--accent);outline-offset:-2px;}
+
+@media(min-width:720px){.sheet{align-items:center;}}
+@media(max-width:719px){
+  body{font-size:16px;}
+  .app{padding:12px 12px 36px;}
+  .bar h2{font-size:22px;min-width:0;}
+  .cell{min-height:84px;padding:5px;}
+  .ev{font-size:11px;padding:2px 4px;}
+  .badge,.chip{padding:6px 10px;font-size:13px;}
+  .gate h1{font-size:34px;}
+  .assist-form{flex-wrap:wrap;}
+  .assist-form .btn{width:100%;}
+  .assist-list li{flex-wrap:wrap;gap:6px;}
+  .ai-day{min-width:0;}
+}
+/* 손전화에서는 한 칸이 50px 남짓이라 글자를 넣어 봐야 못 읽습니다.
+   있다/없다만 점으로 보이고, 내용은 날짜를 눌러 봅니다. */
+@media(max-width:599px){
+  .cell{flex-flow:row wrap;align-content:flex-start;gap:3px;padding:4px 3px;min-height:62px;}
+  .cell-no{flex:0 0 100%;min-width:0;padding:1px 3px;}
+  .ev{flex:0 0 auto;display:block;width:7px;height:7px;padding:0;
+      border-left:0;border-radius:50%;background:var(--accent);
+      font-size:0;line-height:0;color:transparent;}
+  .ev.is-mine{background:var(--mine);}
+  .more{flex:0 0 100%;font-size:10px;line-height:1.2;}
+}
+</style>
+</head>
+<body>
+
+<!-- 0. 환경변수가 덜 들어갔을 때 -->
+<section class="setup" id="setup" hidden>
+  <h1>아직 서버가 안 붙었습니다</h1>
+  <p id="setup-miss" class="miss"></p>
+  <ol>
+    <li>Vercel 에서 이 프로젝트를 엽니다.</li>
+    <li><code>Settings</code> → <code>Environment Variables</code> 로 갑니다.</li>
+    <li>받은 환경변수 파일의 내용을 붙여넣고 저장합니다.</li>
+    <li><code>Deployments</code> → 맨 위 줄 오른쪽 <code>…</code> → <code>Redeploy</code>.
+      <strong>넣기만 하면 반영되지 않습니다. 다시 배포해야 합니다.</strong></li>
+  </ol>
+  <p>표를 아직 안 만들었다면 <code>supabase/schema.sql</code> 을 Supabase 의 SQL Editor 에 붙여넣고 Run 을 누르세요.</p>
+</section>
+
+<!-- 1. 입장 -->
+<section class="gate" id="gate" hidden>
+  <div class="gate-box">
+    <p class="kicker">우리 반</p>
+    <h1>공용 캘린더</h1>
+    <p class="gate-lead">입장코드를 넣으면 같은 달력이 열립니다. 누가 적어도 모두에게 보입니다.</p>
+
+    <label class="field">
+      <span>입장코드</span>
+      <input id="gate-code" inputmode="numeric" autocomplete="off" maxlength="8" placeholder="네 자리">
+    </label>
+    <label class="field">
+      <span>내 이름</span>
+      <input id="gate-name" autocomplete="off" maxlength="12" placeholder="12자까지">
+    </label>
+
+    <p class="err" id="gate-err" hidden></p>
+    <button class="btn btn-primary" id="gate-enter">들어가기</button>
+
+    <p class="gate-foot">입장코드는 문지기일 뿐 자물쇠가 아닙니다. 학생 이름과 전화번호처럼 남에게 보이면 안 되는 것은 적지 않습니다.</p>
+  </div>
+</section>
+
+<!-- 2. 달력 -->
+<section class="app" id="app" hidden>
+  <section class="assist" id="assist" hidden>
+    <h3 class="assist-title">생각나는 대로 적어 보세요</h3>
+    <p class="assist-lead">AI가 날짜와 내용으로 정리해 줍니다. 넣을지는 선생님이 고릅니다. 열쇠는 서버에만 있습니다.</p>
+    <form class="assist-form" id="ai-form">
+      <input id="ai-input" maxlength="300" autocomplete="off" placeholder="예) 다음 주 화요일 학급 회의, 금요일엔 현장학습 답사">
+      <button class="btn btn-primary" id="ai-go" type="submit">정리하기</button>
+    </form>
+    <p class="assist-note" id="ai-note" hidden></p>
+    <ul class="assist-list" id="ai-list"></ul>
+  </section>
+
+  <header class="bar">
+    <div class="bar-left">
+      <button class="nav" id="prev" aria-label="지난달">&lsaquo;</button>
+      <h2 id="title">달력</h2>
+      <button class="nav" id="next" aria-label="다음달">&rsaquo;</button>
+      <button class="chip" id="today">오늘</button>
+    </div>
+    <div class="bar-right">
+      <span class="badge" id="room-badge">방</span>
+      <span class="badge" id="me-badge">이름</span>
+      <button class="chip" id="leave">나가기</button>
+    </div>
+  </header>
+
+  <p class="status" id="status" role="status"></p>
+
+  <div class="week-head" aria-hidden="true">
+    <span>일</span><span>월</span><span>화</span><span>수</span><span>목</span><span>금</span><span>토</span>
+  </div>
+  <div class="grid" id="grid"></div>
+
+  <p class="app-foot">날짜를 누르면 그날 일정을 적습니다. 내가 적은 것은 30분 안에만 지울 수 있습니다.</p>
+</section>
+
+<!-- 3. 하루 -->
+<div class="sheet" id="sheet" hidden>
+  <div class="panel" role="dialog" aria-modal="true" aria-labelledby="panel-title">
+    <div class="panel-head">
+      <h3 id="panel-title">하루</h3>
+      <button class="nav" id="sheet-close" aria-label="닫기">&times;</button>
+    </div>
+    <ul class="list" id="list"></ul>
+    <form class="form" id="form">
+      <input id="input" maxlength="40" autocomplete="off" placeholder="무엇을 적을까요 (40자까지)">
+      <button class="btn btn-primary" type="submit">적기</button>
+    </form>
+    <p class="err" id="sheet-err" hidden style="margin-top:10px"></p>
+  </div>
+</div>
+
+<div class="toast" id="toast" role="status" aria-live="polite" hidden></div>
+
+<script>
+(function () {
+  'use strict';
+
+  var CFG = null;                  // /api/config 에서 받아 옵니다
+  var DELETE_WINDOW_MIN = 30;      // 내가 적은 것을 지울 수 있는 시간
+  var POLL_MS = 7000;              // 다른 사람이 적은 것을 가져오는 주기
+
+  var $ = function (id) { return document.getElementById(id); };
+
+  // 저장소는 막혀 있을 수 있습니다(사생활 보호 모드 등).
+  // 여기서 오류가 나면 아래 단추들이 하나도 안 붙으므로 전부 감쌉니다.
+  function store(key, value) {
+    try {
+      if (value === undefined) return localStorage.getItem(key);
+      localStorage.setItem(key, value);
+    } catch (e) { /* 이번 방문에만 기억합니다 */ }
+    return null;
+  }
+  function newId() {
+    return (window.crypto && crypto.randomUUID) ? crypto.randomUUID()
+      : String(Date.now()) + '-' + Math.random().toString(16).slice(2);
+  }
+  var OWNER = store('cal-owner') || newId();
+  store('cal-owner', OWNER);
+  var myName = store('cal-name') || '';
+
+  function pad(n) { return String(n).padStart(2, '0'); }
+  function ymd(d) { return d.getFullYear() + '-' + pad(d.getMonth() + 1) + '-' + pad(d.getDate()); }
+  var TODAY = ymd(new Date());
+  var WEEK = '일월화수목금토';
+  function dayLabel(day) {
+    var a = day.split('-');
+    var d = new Date(Number(a[0]), Number(a[1]) - 1, Number(a[2]));
+    return Number(a[1]) + '월 ' + Number(a[2]) + '일 (' + WEEK.charAt(d.getDay()) + ')';
+  }
+
+  var cursor = new Date(); cursor.setDate(1);
+  var events = [];
+  var openDay = null;
+  var timer = null;
+  var inflight = 0;
+
+  function say(text, bad) {
+    $('status').textContent = text;
+    $('status').classList.toggle('is-bad', !!bad);
+  }
+
+  var toastTimer = null;
+  function toast(text) {
+    var t = $('toast');
+    t.textContent = text;
+    t.hidden = false;
+    requestAnimationFrame(function () { t.classList.add('is-on'); });
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(function () {
+      t.classList.remove('is-on');
+      setTimeout(function () { t.hidden = true; }, 250);
+    }, 2800);
+  }
+
+  /* ---------- Supabase 에 직접 말 걸기 ----------
+     빌드 도구도 라이브러리도 쓰지 않습니다. 표 주소로 그냥 요청을 보냅니다.
+     apikey 는 공개되는 값이고, 막는 것은 schema.sql 의 RLS 규칙입니다. */
+  function sb(path, options) {
+    var o = options || {};
+    o.headers = Object.assign({
+      apikey: CFG.supabaseAnonKey,
+      Authorization: 'Bearer ' + CFG.supabaseAnonKey,
+      'Content-Type': 'application/json'
+    }, o.headers || {});
+    return fetch(CFG.supabaseUrl.replace(/\/+$/, '') + '/rest/v1/' + path, o)
+      .then(function (r) {
+        return r.text().then(function (t) {
+          var body = null;
+          try { body = t ? JSON.parse(t) : null; } catch (e) { body = null; }
+          if (!r.ok) {
+            var m = (body && (body.message || body.hint || body.error)) || ('서버가 ' + r.status + ' 를 보냈습니다.');
+            throw new Error(m);
+          }
+          return body;
+        });
+      });
+  }
+
+  /* ---------- 입장 ---------- */
+  function gateError(text) { $('gate-err').textContent = text; $('gate-err').hidden = false; }
+
+  function enter() {
+    var code = $('gate-code').value.trim();
+    var name = $('gate-name').value.trim();
+    if (code !== CFG.roomCode) return gateError('입장코드가 다릅니다.');
+    if (!name) return gateError('이름을 적어 주세요.');
+    myName = name.slice(0, 12);
+    store('cal-name', myName);
+    $('gate-err').hidden = true;
+    openCalendar();
+  }
+
+  $('gate-enter').addEventListener('click', enter);
+  $('gate-code').addEventListener('keydown', function (e) { if (e.key === 'Enter') $('gate-name').focus(); });
+  $('gate-name').addEventListener('keydown', function (e) { if (e.key === 'Enter') enter(); });
+  $('leave').addEventListener('click', function () { store('cal-name', ''); location.reload(); });
+
+  function openCalendar() {
+    $('gate').hidden = true;
+    $('app').hidden = false;
+    $('room-badge').textContent = '방 ' + CFG.roomCode;
+    $('me-badge').textContent = myName;
+    if (CFG.hasAi) $('assist').hidden = false;
+    load();
+    if (!timer) timer = setInterval(function () { if (!document.hidden) load(true); }, POLL_MS);
+  }
+
+  /* ---------- 불러오기 ---------- */
+  function monthKey(base) { return base.getFullYear() + '-' + pad(base.getMonth() + 1); }
+
+  function load(quiet) {
+    var y = cursor.getFullYear(), m = cursor.getMonth();
+    var from = ymd(new Date(y, m, 1));
+    var to = ymd(new Date(y, m + 1, 0));
+    var month = monthKey(cursor);
+    var seq = ++inflight;
+    if (!quiet) say('불러오는 중입니다.');
+    return sb('events?select=id,day,title,author,owner,created_at'
+      + '&day=gte.' + from + '&day=lte.' + to + '&order=created_at.asc')
+      .then(function (rows) {
+        // 그 사이 달을 넘겼으면 이 응답은 버립니다.
+        if (seq !== inflight || month !== monthKey(cursor)) return;
+        events = rows || [];
+        say(events.length + '개가 올라와 있습니다.');
+        render();
+        if (openDay) renderSheet();
+      })
+      .catch(function (e) {
+        if (seq !== inflight) return;
+        say('불러오지 못했습니다. ' + e.message, true);
+      });
+  }
+
+  /* ---------- 달력 ---------- */
+  function render() {
+    var y = cursor.getFullYear(), m = cursor.getMonth();
+    $('title').textContent = y + '년 ' + (m + 1) + '월';
+
+    var first = new Date(y, m, 1);
+    var start = new Date(y, m, 1 - first.getDay());
+    var daysInMonth = new Date(y, m + 1, 0).getDate();
+    var cells = Math.ceil((first.getDay() + daysInMonth) / 7) * 7;
+
+    var byDay = {};
+    events.forEach(function (ev) { (byDay[ev.day] = byDay[ev.day] || []).push(ev); });
+
+    var grid = $('grid');
+    grid.replaceChildren();
+
+    for (var i = 0; i < cells; i++) {
+      var d = new Date(start.getFullYear(), start.getMonth(), start.getDate() + i);
+      var key = ymd(d);
+      var out = d.getMonth() !== m;
+
+      var cell = document.createElement(out ? 'div' : 'button');
+      cell.className = 'cell';
+      if (out) cell.classList.add('is-out');
+      if (d.getDay() === 0) cell.classList.add('is-sun');
+      if (d.getDay() === 6) cell.classList.add('is-sat');
+      if (key === TODAY) cell.classList.add('is-today');
+
+      var no = document.createElement('span');
+      no.className = 'cell-no';
+      no.textContent = d.getDate();
+      cell.appendChild(no);
+
+      if (!out) {
+        cell.type = 'button';
+        cell.addEventListener('click', openSheet.bind(null, key));
+        var list = byDay[key] || [];
+        list.slice(0, 3).forEach(function (ev) {
+          var chip = document.createElement('span');
+          chip.className = 'ev' + (ev.owner === OWNER ? ' is-mine' : '');
+          chip.textContent = ev.title;
+          chip.title = ev.author + ' — ' + ev.title;
+          cell.appendChild(chip);
+        });
+        if (list.length > 3) {
+          var more = document.createElement('span');
+          more.className = 'more';
+          more.textContent = '+' + (list.length - 3) + '개 더';
+          cell.appendChild(more);
+        }
+      }
+      grid.appendChild(cell);
+    }
+  }
+
+  $('prev').addEventListener('click', function () { closeSheet(); cursor.setMonth(cursor.getMonth() - 1); load(); });
+  $('next').addEventListener('click', function () { closeSheet(); cursor.setMonth(cursor.getMonth() + 1); load(); });
+  $('today').addEventListener('click', function () { closeSheet(); cursor = new Date(); cursor.setDate(1); load(); });
+
+  /* ---------- 하루 ---------- */
+  function openSheet(day) {
+    openDay = day;
+    $('sheet').hidden = false;
+    $('sheet-err').hidden = true;
+    $('input').value = '';
+    renderSheet();
+    $('input').focus();
+  }
+  function closeSheet() { openDay = null; $('sheet').hidden = true; }
+
+  $('sheet-close').addEventListener('click', closeSheet);
+  $('sheet').addEventListener('click', function (e) { if (e.target === $('sheet')) closeSheet(); });
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && !$('sheet').hidden) closeSheet(); });
+
+  function canDelete(ev) {
+    if (ev.owner !== OWNER) return false;
+    return (Date.now() - new Date(ev.created_at).getTime()) / 60000 < DELETE_WINDOW_MIN;
+  }
+
+  function renderSheet() {
+    var a = openDay.split('-');
+    $('panel-title').textContent = Number(a[1]) + '월 ' + Number(a[2]) + '일';
+
+    var list = events.filter(function (ev) { return ev.day === openDay; });
+    var ul = $('list');
+    ul.replaceChildren();
+
+    if (!list.length) {
+      var li0 = document.createElement('li');
+      li0.className = 'empty';
+      li0.textContent = '아직 아무것도 없습니다. 첫 줄을 적어 보세요.';
+      ul.appendChild(li0);
+      return;
+    }
+    list.forEach(function (ev) {
+      var li = document.createElement('li');
+      var who = document.createElement('span');
+      who.className = 'who'; who.textContent = ev.author;
+      var what = document.createElement('span');
+      what.className = 'what'; what.textContent = ev.title;
+      li.appendChild(who); li.appendChild(what);
+      if (canDelete(ev)) {
+        var del = document.createElement('button');
+        del.className = 'del'; del.type = 'button'; del.textContent = '지우기';
+        del.addEventListener('click', function () { remove(ev.id); });
+        li.appendChild(del);
+      }
+      ul.appendChild(li);
+    });
+  }
+
+  function sheetError(text) { $('sheet-err').textContent = text; $('sheet-err').hidden = false; }
+
+  $('form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var input = $('input');
+    var title = input.value.trim();
+    if (!title || !openDay) return;
+    var day = openDay;
+    $('sheet-err').hidden = true;
+
+    sb('events', {
+      method: 'POST',
+      headers: { Prefer: 'return=minimal' },
+      body: JSON.stringify({ day: day, title: title.slice(0, 40), author: myName, owner: OWNER })
+    }).then(function () {
+      input.value = '';
+      toast(dayLabel(day) + '에 넣었습니다.');
+      return load(true);
+    }).catch(function (err) {
+      sheetError('적지 못했습니다. ' + err.message);
+    });
+  });
+
+  function remove(id) {
+    // return=representation 이라야 정말 지워졌는지 알 수 있습니다.
+    // RLS 가 막으면 오류가 아니라 '0줄 지움'으로 조용히 돌아옵니다.
+    sb('events?id=eq.' + encodeURIComponent(id), {
+      method: 'DELETE',
+      headers: { Prefer: 'return=representation' }
+    }).then(function (rows) {
+      if (!rows || !rows.length) {
+        sheetError('지우지 못했습니다. 적은 지 30분이 지났거나 내가 적은 것이 아닙니다.');
+        return;
+      }
+      toast('지웠습니다.');
+      return load(true);
+    }).catch(function (err) {
+      sheetError('지우지 못했습니다. ' + err.message);
+    });
+  }
+
+  /* ---------- 정리 어시스턴트 ---------- */
+  function aiNote(text, bad) {
+    var n = $('ai-note');
+    if (!text) { n.hidden = true; return; }
+    n.textContent = text;
+    n.classList.toggle('is-bad', !!bad);
+    n.hidden = false;
+  }
+
+  function aiRender(items) {
+    var ul = $('ai-list');
+    ul.replaceChildren();
+    items.forEach(function (it) {
+      var li = document.createElement('li');
+      var d = document.createElement('span');
+      d.className = 'ai-day'; d.textContent = dayLabel(it.day);
+      var t = document.createElement('span');
+      t.className = 'ai-title'; t.textContent = it.title;
+      var add = document.createElement('button');
+      add.className = 'btn btn-small'; add.type = 'button'; add.textContent = '추가하기';
+      add.addEventListener('click', function () {
+        add.disabled = true; add.textContent = '넣는 중';
+        sb('events', {
+          method: 'POST',
+          headers: { Prefer: 'return=minimal' },
+          body: JSON.stringify({ day: it.day, title: it.title, author: myName, owner: OWNER })
+        }).then(function () {
+          toast(dayLabel(it.day) + '에 넣었습니다.');
+          li.remove();
+          if (!ul.children.length) aiNote('');
+          return load(true);
+        }).catch(function (err) {
+          add.disabled = false; add.textContent = '추가하기';
+          aiNote('넣지 못했습니다. ' + err.message, true);
+        });
+      });
+      li.appendChild(d); li.appendChild(t); li.appendChild(add);
+      ul.appendChild(li);
+    });
+  }
+
+  $('ai-form').addEventListener('submit', function (e) {
+    e.preventDefault();
+    var text = $('ai-input').value.trim();
+    if (!text) return;
+    var go = $('ai-go');
+    go.disabled = true; go.textContent = '정리하는 중';
+    aiNote('AI에게 물어보는 중입니다.');
+    $('ai-list').replaceChildren();
+
+    fetch('/api/assist', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ text: text.slice(0, 300), today: ymd(new Date()) })
+    }).then(function (r) {
+      return r.json().then(function (b) {
+        if (!r.ok) throw new Error(b.error || ('서버가 ' + r.status + ' 를 보냈습니다.'));
+        return b;
+      });
+    }).then(function (b) {
+      var items = b.items || [];
+      aiNote(items.length + '개로 정리했습니다. 넣을 것만 고르세요.');
+      aiRender(items);
+    }).catch(function (err) {
+      aiNote(err.message, true);
+    }).then(function () {
+      go.disabled = false; go.textContent = '정리하기';
+    });
+  });
+
+  /* ---------- 시작 ---------- */
+  fetch('/api/config')
+    .then(function (r) { return r.json(); })
+    .then(function (cfg) {
+      CFG = cfg;
+      if (!cfg.ready) {
+        var miss = [];
+        if (!cfg.supabaseUrl) miss.push('SUPABASE_URL');
+        if (!cfg.supabaseAnonKey) miss.push('SUPABASE_ANON_KEY');
+        $('setup-miss').textContent = '없는 환경변수: ' + miss.join(', ');
+        $('setup').hidden = false;
+        return;
+      }
+      $('gate').hidden = false;
+      if (myName) $('gate-name').value = myName;
+      $('gate-code').focus();
+    })
+    .catch(function () {
+      $('setup-miss').textContent = '/api/config 를 부르지 못했습니다. Vercel 에 올린 뒤에 열어 주세요.';
+      $('setup').hidden = false;
+    });
+})();
+</script>
+</body>
+</html>
