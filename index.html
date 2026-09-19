@@ -369,6 +369,7 @@ button,input{font-family:inherit;font-size:inherit;color:inherit;}
     var seq = ++inflight;
     if (!quiet) say('불러오는 중입니다.');
     return sb('events?select=id,day,title,author,owner,created_at'
+      + '&room=eq.' + encodeURIComponent(CFG.roomCode)
       + '&day=gte.' + from + '&day=lte.' + to + '&order=created_at.asc')
       .then(function (rows) {
         // 그 사이 달을 넘겼으면 이 응답은 버립니다.
@@ -508,7 +509,7 @@ button,input{font-family:inherit;font-size:inherit;color:inherit;}
     sb('events', {
       method: 'POST',
       headers: { Prefer: 'return=minimal' },
-      body: JSON.stringify({ day: day, title: title.slice(0, 40), author: myName, owner: OWNER })
+      body: JSON.stringify({ room: CFG.roomCode, day: day, title: title.slice(0, 40), author: myName, owner: OWNER })
     }).then(function () {
       input.value = '';
       toast(dayLabel(day) + '에 넣었습니다.');
@@ -561,7 +562,7 @@ button,input{font-family:inherit;font-size:inherit;color:inherit;}
         sb('events', {
           method: 'POST',
           headers: { Prefer: 'return=minimal' },
-          body: JSON.stringify({ day: it.day, title: it.title, author: myName, owner: OWNER })
+          body: JSON.stringify({ room: CFG.roomCode, day: it.day, title: it.title, author: myName, owner: OWNER })
         }).then(function () {
           toast(dayLabel(it.day) + '에 넣었습니다.');
           li.remove();

@@ -4,6 +4,7 @@
 
 create table public.events (
   id         bigint generated always as identity primary key,
+  room       text        not null default '1111',
   day        date        not null,
   title      text        not null,
   author     text        not null,
@@ -11,7 +12,10 @@ create table public.events (
   created_at timestamptz not null default now()
 );
 
-create index events_day_idx on public.events (day);
+-- room 은 '어느 달력이냐' 입니다. 환경변수 ROOM_CODE 값이 그대로 들어갑니다.
+-- 반 전체가 같은 코드를 쓰면 한 달력을 같이 쓰고,
+-- 사람마다 다른 코드를 쓰면 같은 서버 안에서 달력만 갈라집니다.
+create index events_room_day_idx on public.events (room, day);
 
 -- ── 여기서부터가 진짜 자물쇠입니다 ────────────────────────────
 -- anon 키는 브라우저에 그대로 드러나는 공개 값입니다.
@@ -27,7 +31,8 @@ create policy "누구나 본다"
 create policy "짧은 글만 쓴다"
   on public.events for insert to anon
   with check (
-    char_length(title)  between 1 and 40
+    char_length(room)   between 1 and 16
+    and char_length(title)  between 1 and 40
     and char_length(author) between 1 and 12
     and char_length(owner)  between 1 and 64
   );
